@@ -1,0 +1,50 @@
+settings:
+  repository: Sorted
+
+  ignore:
+    - something.txt
+
+  default:
+    delete:
+      -
+        glob: '*.torrent'
+      -
+        glob: '*.nfo'
+
+  categories:
+    shows:
+      directory: Shows
+      priority: 1  # lower priority is higher
+
+    movies:
+      directory: Movies
+      priority: 99
+
+rules:
+  shows:
+    The Big Bang Theory:
+      filters:
+        -
+          regex:
+            flags: [x, i]
+            pattern: '^the.big.bang.theory.s(?P<series>\d\d)e(?P<episode>\d\d)[^/]*\.(?P<extension>avi|mp4)$'
+            rename: 'The Big Bang Theory - {series} - {episode}.{extension}'
+
+    Would I lie to you:
+      filters:
+        -
+          regex:
+            flags: [i]
+            pattern: '^would.i.lie.to.you.s(?P<series>\d\d)e(?P<episode>\d\d)[^/]*\.(?P<extension>avi|mp4)$'
+            rename: 'Series {series}/Would I lie to you {episode}.{extension}'
+        -
+          regex:
+            flags: [i]
+            pattern: '^would.i.lie.to.you.[^/]*/would\.i\.lie\.to\.you\.s(?P<series>\d\d)e(?P<episode>\d\d)[^/]*\.(?P<extension>avi|mp4)$'
+            rename: 'Series {series}/Would I lie to you {episode}.{extension}'
+
+  movies:
+    -
+      glob: '*.avi'
+    -
+      glob: '*.mp4'

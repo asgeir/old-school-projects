@@ -1,0 +1,31 @@
+This is a select() based server that will service any waiting connection
+before calling select() again.
+
+As per the HTTP/1.1 RFC the default behaviour is to keep connections
+alive, but clients can send a Connection: close header to change that.
+
+The server will service up to 10 simultaneous clients with a further
+backlog of 10 connections.
+
+Most of the time is spent in httpd_req_parser.c:req_parser_add_text
+doing memory allocation. So a better memory allocation strategy
+should result in a faster server. However when serving 7 simultaneous
+clients, each making 2000 requests, it seems to handle ~10000 requests
+per second which should be fast enough for this project.
+
+The server is split into several units.
+    * The main function that handles setup and shutdown
+    * httpd_server that handles listening and manages connections
+    * httpd_connection that represents a connection to a single client
+    * httpd_req_parser that parses the incoming requests
+    * httpd_req_handler that handles the incoming requests
+The architecture is modular (or "object-oriented")
+
+The request parser is very strict and will not allow \n instead of \r\n
+and will also strictly enforce use of whitespace. The parser itself
+is a DFA that could perhaps be better served with a regex but it's
+easier to embed code in the parser this way.
+
+The request handler is very simplistic and should not be considered
+practical for any real use. However it will work well enough to
+service the requirements of this project.

@@ -1,0 +1,4 @@
+# The following line may work but needs egg archives instead of wheel archives
+#stagger==0.4.2
+
+git+https://github.com/asgeir/stagger#egg=stagger

@@ -1,0 +1,7 @@
+I'm more used to writing C++ than C so be prepared for some weirdness.
+
+Only the binary transport mode is supported. Netascii seems like too much work.
+The server will make a best effort to contain data requests to the specified
+data directory but will be error prone (for example the current implementation
+will allow reads from /path/to/data* if /path/to/data is the specified
+directory)

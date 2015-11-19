@@ -1,0 +1,6 @@
+add_subdirectory(assimp)
+add_subdirectory(compositor)
+add_subdirectory(crepuscular)
+add_subdirectory(cubemap)
+add_subdirectory(glengine2)
+add_subdirectory(shadow)

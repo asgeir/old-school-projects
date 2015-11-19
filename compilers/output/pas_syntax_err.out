@@ -1,0 +1,4 @@
+ERROR in line 1: Expected ')'
+	Program test(input output
+	                   ^~~~~~
+Number of errors: 1

@@ -1,0 +1,27 @@
+#!/bin/bash
+
+curl -s "http://127.0.0.1:3300/page{1,2}.php?[1-1000]" > /dev/null &
+pidlist="$pidlist $!"
+curl -s "http://127.0.0.1:3300/page{1,2}.php?[1-1000]" > /dev/null &
+pidlist="$pidlist $!"
+curl -s "http://127.0.0.1:3300/page{1,2}.php?[1-1000]" > /dev/null &
+pidlist="$pidlist $!"
+curl -s "http://127.0.0.1:3300/page{1,2}.php?[1-1000]" > /dev/null &
+pidlist="$pidlist $!"
+curl -s "http://127.0.0.1:3300/page{1,2}.php?[1-1000]" > /dev/null &
+pidlist="$pidlist $!"
+curl -s "http://127.0.0.1:3300/page{1,2}.php?[1-1000]" > /dev/null &
+pidlist="$pidlist $!"
+curl -s "http://127.0.0.1:3300/page{1,2}.php?[1-1000]" > /dev/null &
+pidlist="$pidlist $!"
+
+for job in $pidlist; do
+    echo $job
+    wait $job || let "FAIL+=1"
+done
+
+if [ "$FAIL" == "0" ]; then
+    echo "YAY!"
+else
+    echo "FAIL! ($FAIL)"
+fi

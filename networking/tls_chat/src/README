@@ -1,0 +1,311 @@
+======
+README
+======
+
+
+OVERVIEW
+--------
+
+	To add a new user to the password database you must use the chatd_user tool.
+
+GENERATING A SELF-SIGNED CERTIFICATE
+------------------------------------
+
+	$ openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650
+
+	chatd supports both encrypted and plaintext keyfiles. For encrypted
+	keyfiles it will prompt for the password on startup.
+
+
+====================
+ANSWERS TO QUESTIONS
+====================
+
+
+SECTION 5
+---------
+
+	The salts and password verifiers are stored in chatd_passwd.db
+	I do not store passwords or data useful for password recovery.
+	The passwords are never sent over the wire.
+	The authentication method used (SRP) is a zero-knowledge method
+	that allows the users to prove to the server that they know
+	their own passwords without giving the server any useful information
+	about the passwords, and it also allows them to verify that they
+	were the ones to give the password verification info to the server.
+	This could also be used to implement perfect forward secrecy.
+
+SECTION 6
+---------
+
+	Private messages should not be logged because people will expect
+	them to be private. Privacy is implied in the name.
+
+
+========
+PROTOCOL
+========
+
+
+All numbers should be interpreted as hex values unless indicated otherwise.
+
+GENERAL OVERVIEW
+----------------
+
+Unauthenticated users will be given usernames of the format guest[0-9]{3,}
+
+Commands:
+	/bye				- Disconnect from the server
+	/join <name>		- Joins/creates a chatroom
+	/list				- Display a list of all active chatrooms
+	/say <user> <msg>	- Sends a private message to user
+	/user <user>		- Logs in as a user
+	/who				- Display a list of connected users.
+						  Will show their username, IP-address, port, and chatroom
+
+Optional Commands:
+	/game <user>		- Starts a dice rolling game with user
+	/roll				- Makes a die roll after a challenge has been made
+
+Game Flow
+	 1. Alice challenges Bob
+			/game Bob
+	 2. Bob receives a server message
+			*** Alice has challenged you to a game of dice
+	 3. Bob may ignore the challenge and the challenge will then timeout after a short while.
+	 		*** Bob did not respond to your game challenge
+	 4. Bob may respond to the challenge
+			/game Alice
+	 5. A game has now been started. If no rolls are made within a timeout period a tie message
+	    is sent to both parties.
+			*** You have tied with {Alice/Bob}
+	 6. Alice and Bob may now send a roll command
+			/roll
+	 7. If only one user sends a roll command before the timeout that user wins.
+			*** You won your game against {Alice/Bob}
+	 8. When both users have sent a roll command one of them is chosen at random to go first.
+	 9. The throws are generated (random[1,6]+random[1,6]; random[1,6]+random[1,6])
+	10. The numbers are compared and the winner/loser declared by sending server messages to both
+		parties.
+			*** You {won/lost} your game against {Alice/Bob} (<throw>)
+
+	Depending on the PRNG this may be vulnerable to timing attacks, but since
+	both users get to vote when the game starts and the later user "wins" the
+	vote it is harder for them to know when, exactly, the random numbers are
+	generated.
+
+
+Messages may be up-to 512 bytes long (2 bytes for length field)
+User names may be up-to 64 bytes long, but must be at-least one character long,
+and must only include printable characters (excluding space)
+Channel names may be up-to 64 bytes long, but must be at-least one character long,
+and must only include printable characters (excluding space)
+Printable characters are ASCII 0x20 - 0x7e
+
+
+AUTHENTICATION
+--------------
+
+Authentication is performed using SRP (RFC5054) using SHA256 or SHA512
+instead of SHA1. The size of the salt is 32-bits.
+The supported groups are 1024, 2048, 4096, and 8192.
+
+Reference implementation: https://github.com/cocagne/csrp
+	* Needs to be patched so that the generator for the 8192 group is 19
+	  in accordance with the RFC
+
+The server sends the group and hash function as part of every message.
+The shared secret that is created during the authentication process is
+not used and may be discarded.
+The authentication process will look something like this:
+
+	Server:
+		Server message
+		Authentication: SHA256 | 4096
+		Message: *** Welcome
+
+		00 13 00 0b 2a 2a 2a 20 57 65 6c 63 6f 6d 65
+
+	Client:
+		Authenticate
+		Sending username and A
+		Username length: 5
+		A length: 0xLLLL
+		Username: Alice
+		A: ???
+
+		06 00 05 LL LL 41 6c 69 63 65 ?? ?? ?? ...
+
+	Server:
+		Sending seed and B
+		Authentication: SHA256 | 4096
+		Seed: 0xSSSSSSSS
+		B length: 0xLLLL
+		B: ???
+
+		03 13 SS SS SS SS LL LL ?? ?? ?? ...
+
+	Client:
+		Sending M
+		Length: 0x20
+		M: ???
+
+		06 01 20 ?? ?? ?? ...
+
+	Server:
+		Sending H(AMK)
+		Authentication: SHA256 | 4096
+		Length: 0x20
+		H(AMK): ???
+
+		04 13 20 ?? ?? ?? ...
+
+
+
+SERVER TO CLIENT COMMUNICATION
+------------------------------
+
+Server Packet Header
+	Byte - Description
+	00   - Type (1B)
+		   00 - Server message
+		   01 - Channel message
+		   02 - Private message
+		   03 - Sending seed and B
+		   04 - Sending H(AMK)
+	01   - Authentication group (1B)
+		   Bitwise OR of generator group and hash function.
+		   Both MUST be present.
+
+		   Group
+		   01 - 1024
+		   02 - 2048
+		   03 - 4096
+		   04 - 8192
+
+		   Hash
+		   10 - SHA256
+		   20 - SHA512
+
+Server Packet Body
+	00 - Server message
+		Byte - Description
+		02   - Length (2B, MSB first)
+		03
+		04   - Message (Max 512 Bytes, not zero terminated)
+		...
+
+	01 - Channel message
+	02 - Private message
+		Byte - Description
+		02   - Length (2B, MSB first)
+		03
+		04   - From length (1B, max value 64)
+		05   - From host length (1B, max value 255)
+		06   - Start of sender
+		...
+		06 + from length - Start of sender host info
+		...
+		06 + from length + host length - Message (Max 512 Bytes, not zero terminated)
+		...
+
+	03 - Sending seed and B
+		Byte - Description
+		02   - Seed (4B, MSB first)
+		03
+		04
+		05
+		06   - Length of B (2B, MSB first, max value 1024)
+		07
+		08   - Start of B (Max 1024 bytes, MSB first)
+		...
+
+	04 - Sending H(AMK)
+		Byte - Description
+		02   - Length of H(AMK) (max value 64)
+		03   - Start of H(AMK) (Max 64 bytes, MSB first)
+		...
+
+
+CLIENT TO SERVER COMMUNICATION
+------------------------------
+
+Client Packet Header
+	Byte - Description
+	00   - Opcode (1B)
+		   00 - Bye
+		   01 - Message
+		   02 - Say
+		   03 - Who
+		   04 - List
+		   05 - Join
+		   06 - User
+
+		   71 - Game
+		   72 - Roll
+
+Client Packet Body
+	00 - Bye
+		No extra info needed
+
+	01 - Message
+		Byte - Description
+		01   - Length (2B, MSB first)
+		02
+		03   - Message (Max 512 Bytes, not null terminated)
+		...
+
+	02 - Say
+		Byte - Description
+		01   - Target length (1B, max value 64, min value 1)
+		02   - Message length (2B, MSB first)
+		03
+		04   - Start of username (Max 64 bytes, not null terminated)
+		...
+		04 + target length - Start of message (Max 512 Bytes, not null terminated)
+		...
+
+	03 - Who
+		No extra info needed
+
+	04 - List
+		No extra info needed
+
+	05 - Join
+		Byte - Description
+		01   - Channel length (1B, max value 64, min value 1)
+		02   - Channel name (Max 64 bytes, not null terminated)
+		...
+
+	06 - User Authentication Header
+		Byte - Description
+		01   - Phase
+			   00 - Sending username and A
+			   01 - Sending M
+
+		User Authentication Body
+			00 - Sending username and A
+				Byte - Description
+				02   - Username length (1B, max value 64, min value 1)
+				03   - Length of A (2B, MSB first, max value 1024)
+				04
+				05   - Start of username (Max 64 bytes, not null terminated)
+				...
+				05 + username length - Start of A (Max 1024 bytes, MSB first)
+				...
+
+			01 - Sending M
+				Byte - Description
+				02   - Length of M (max value 64)
+				03   - Start of M (Max 64 bytes, MSB first)
+				...
+
+	71 - Game
+		Byte - Description
+		01   - Target length (1B, max value 64, min value 1)
+		02   - Start of username (Max 64 bytes, not null terminated)
+		...
+
+	72 - Roll
+		No extra info needed
+

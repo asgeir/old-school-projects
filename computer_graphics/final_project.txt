@@ -1,0 +1,54 @@
+
+use assimp for scene management
+"skybox" is colored according to time of day
+sun position is animated
+flying camera wasd movement, q and e for down and up, mouse for looking
+screen-space volumetric lighting
+shadow mapping (possibly in screen-space)
+screen-space ambient obscurance
+
+http://http.developer.nvidia.com/GPUGems/gpugems_ch12.html
+
+http://www.codinglabs.net/tutorial_simple_def_rendering.aspx
+http://www.codinglabs.net/tutorial_opengl_deferred_rendering_shadow_mapping.aspx
+
+http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-14-render-to-texture/
+http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-16-shadow-mapping/
+
+Percentage-closer filtering
+http://http.developer.nvidia.com/GPUGems/gpugems_ch11.html
+
+Percentage-closer soft shadows
+http://developer.download.nvidia.com/shaderlibrary/docs/shadow_PCSS.pdf
+
+http://bkcore.com/blog/3d/webgl-three-js-volumetric-light-godrays.html
+http://bkcore.com/blog/3d/webgl-three-js-animated-selective-glow.html
+
+http://http.developer.nvidia.com/GPUGems/gpugems_ch12.html
+http://www.lighthouse3d.com/tutorials/glsl-tutorial/the-normal-matrix/
+
+http://madebyevan.com/webgl-water/
+
+http://msdn.microsoft.com/en-us/library/windows/desktop/ee416324(v=vs.85).aspx
+http://msdn.microsoft.com/en-us/library/windows/desktop/ee416307(v=vs.85).aspx
+
+
+Theories on how to use alglib
+	alglib::real_1d_array x = "[1.0, 2.0, 3.0]";
+	alglib::real_1d_array y = "[3.0, 2.0, 1.0]";
+	alglib::real_1d_array slope = "[-1, -1, -1]";
+
+	alglib::spline1dinterpolant i;
+	alglib::spline1dbuildhermite(x, y, slope, i);
+
+	double x_value = 3.0;
+	double y_value = alglib::spline1dcalc(i, x_value);
+	assert(y_value == 1.0);
+
+	double x_value = 0.0;
+	double y_value = alglib::spline1dcalc(i, x_value);
+	assert(y_value == 4.0);
+
+	double x_value = 4.0;
+	double y_value = alglib::spline1dcalc(i, x_value);
+	assert(y_value == 0.0);

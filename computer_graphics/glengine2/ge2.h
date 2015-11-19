@@ -1,0 +1,23 @@
+#pragma once
+
+#include "ge2application.h"
+#include "ge2camera.h"
+#include "ge2common.h"
+#include "ge2compositor.h"
+#include "ge2cubeframebuffer.h"
+#include "ge2cubemap.h"
+#include "ge2debugcamera.h"
+#include "ge2framebuffer.h"
+#include "ge2fsquad.h"
+#include "ge2gamestate.h"
+#include "ge2geometry.h"
+#include "ge2material.h"
+#include "ge2mesh.h"
+#include "ge2node.h"
+#include "ge2posteffects.h"
+#include "ge2renderer.h"
+#include "ge2resourcemgr.h"
+#include "ge2shader.h"
+#include "ge2texture2d.h"
+#include "ge2time.h"
+

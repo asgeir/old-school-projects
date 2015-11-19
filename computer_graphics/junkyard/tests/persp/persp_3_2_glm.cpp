@@ -1,0 +1,283 @@
+#include "gl_core_3_2.h"
+#include "SDL.h"
+#include "SDL_keyboard.h"
+#include "SDL_opengl.h"
+#include "SDL_scancode.h"
+#include "SDL_timer.h"
+
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/transform.hpp>
+
+#include "loadshaders_3_2.h"
+
+#include <cmath>
+#include <iostream>
+#include <stdint.h>
+
+namespace {
+
+constexpr float PI = 2*3.1415926;
+constexpr float TWO_PI = 2*PI;
+
+constexpr GLubyte *bufferOffset(size_t bytes)
+{
+    return static_cast<GLubyte *>(0) + bytes;
+}
+
+constexpr float degToRad(float angle)
+{
+    return angle * PI / 180;
+}
+
+constexpr float radToDeg(float angle)
+{
+    return angle * 180 / PI;
+}
+
+static const glm::vec3 kUnitVectorX{1.0f, 0.0f, 0.0f};
+static const glm::vec3 kUnitVectorY{0.0f, 1.0f, 0.0f};
+static const glm::vec3 kUnitVectorZ{0.0f, 0.0f, 1.0f};
+
+const int kWindowWidth = 800;
+const int kWindowHeight = 600;
+
+enum VAO_IDs { Triangles, NumVAOs };
+enum Buffer_IDs { ArrayBuffer, ColorBuffer, IndexBuffer, NumBuffers };
+
+GLuint VAOs[NumVAOs];
+GLuint Buffers[NumBuffers];
+
+uint32_t oldTime = 0;
+uint32_t currentTime = 0;
+
+const GLuint NumVertices = 8;
+const GLuint NumIndices = 36;
+
+GLint vPositionIndex = -1;
+GLint vColorIndex = -1;
+GLint mModelViewIndex = -1;
+GLint mProjectionIndex = -1;
+
+glm::mat4 cameraTransform;
+
+void initCube()
+{
+    glGenVertexArrays(NumVAOs, VAOs);
+    glBindVertexArray(VAOs[Triangles]);
+
+    glm::vec3 vertices[NumVertices] = {
+        glm::vec3{-0.5f,  0.5f,  0.5f},
+        glm::vec3{ 0.5f,  0.5f,  0.5f},
+        glm::vec3{ 0.5f,  0.5f, -0.5f},
+        glm::vec3{-0.5f,  0.5f, -0.5f},
+
+        glm::vec3{-0.5f, -0.5f,  0.5f},
+        glm::vec3{ 0.5f, -0.5f,  0.5f},
+        glm::vec3{ 0.5f, -0.5f, -0.5f},
+        glm::vec3{-0.5f, -0.5f, -0.5f}
+    };
+
+    glGenBuffers(NumBuffers, Buffers);
+    glBindBuffer(GL_ARRAY_BUFFER, Buffers[ArrayBuffer]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(vPositionIndex, 3, GL_FLOAT, GL_FALSE, 0, bufferOffset(0));
+    glEnableVertexAttribArray(vPositionIndex);
+
+    struct { float r, g, b; } colors[NumVertices] = {
+        { 0.0, 1.0, 0.0 },
+        { 0.0, 0.0, 1.0 },
+        { 0.0, 1.0, 0.0 },
+        { 0.0, 0.0, 1.0 },
+
+        { 0.0, 0.0, 1.0 },
+        { 1.0, 0.0, 0.0 },
+        { 0.0, 0.0, 1.0 },
+        { 1.0, 0.0, 0.0 }
+    };
+
+    glBindBuffer(GL_ARRAY_BUFFER, Buffers[ColorBuffer]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(vColorIndex, 3, GL_FLOAT, GL_FALSE, 0, bufferOffset(0));
+    glEnableVertexAttribArray(vColorIndex);
+
+    GLubyte indices[NumIndices] = {
+        // top
+        0, 1, 3,
+        3, 1, 2,
+
+        // front
+        4, 5, 0,
+        0, 5, 1,
+
+        // bottom
+        5, 4, 6,
+        6, 4, 7,
+
+        // back
+        6, 7, 2,
+        2, 7, 3,
+
+        // left side
+        7, 4, 3,
+        3, 4, 0,
+
+        // right side
+        5, 6, 1,
+        1, 6, 2
+    };
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Buffers[IndexBuffer]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+}
+
+void init()
+{
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+
+    ShaderInfo shaders[] = {
+        { GL_VERTEX_SHADER, "../tests/persp/persp_3_2.vert" },
+        { GL_FRAGMENT_SHADER, "../tests/persp/persp_3_2.frag" },
+        { GL_NONE, NULL }
+    };
+
+    GLuint program = loadShaders(shaders);
+    glUseProgram(program);
+
+    vPositionIndex = glGetAttribLocation(program, "vPosition");
+    vColorIndex = glGetAttribLocation(program, "vColor");
+    mModelViewIndex = glGetUniformLocation(program, "mModelView");
+    mProjectionIndex = glGetUniformLocation(program, "mProjection");
+
+    initCube();
+
+    cameraTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+}
+
+const glm::mat4 kProjection = glm::perspectiveFov(degToRad(40), (float)kWindowWidth, (float)kWindowHeight, 0.1f, 100.0f);
+float rotationAngle = 0;
+
+const float cameraSpeed = 1.5f;
+
+void moveCamera(float deltaTime)
+{
+    const Uint8 *state = SDL_GetKeyboardState(NULL);
+
+    glm::vec3 direction(0.0f);
+    if (state[SDL_SCANCODE_W]) {
+        direction += kUnitVectorZ;
+    } else if (state[SDL_SCANCODE_S]) {
+        direction -= kUnitVectorZ;
+    } else if (state[SDL_SCANCODE_A]) {
+        direction += kUnitVectorX;
+    } else if (state[SDL_SCANCODE_D]) {
+        direction -= kUnitVectorX;
+    }
+
+    if (glm::dot(direction, direction)) {
+        cameraTransform = glm::translate(cameraTransform, glm::normalize(direction) * cameraSpeed * deltaTime);
+    }
+}
+
+void display()
+{
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    oldTime = currentTime;
+    currentTime = SDL_GetTicks();
+    float deltaTime = (currentTime - oldTime) / 1000.0f;
+
+    moveCamera(deltaTime);
+
+    glm::mat4 modelTransform = glm::translate(glm::mat4(1.0f), glm::vec3(cos(rotationAngle), sin(rotationAngle), -2));
+
+    rotationAngle = fmod(rotationAngle + (deltaTime * (PI / 15.0f)), TWO_PI);
+    glm::mat4 modelRotation =
+        glm::rotate(rotationAngle, kUnitVectorX) *
+        glm::rotate(rotationAngle, kUnitVectorY) *
+        glm::mat4(1.0f);
+
+    glm::mat4 modelView = cameraTransform * modelTransform * modelRotation;
+    glUniformMatrix4fv(mModelViewIndex, 1, GL_FALSE, glm::value_ptr(modelView));
+    glUniformMatrix4fv(mProjectionIndex, 1, GL_FALSE, glm::value_ptr(kProjection));
+
+    glBindVertexArray(VAOs[Triangles]);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Buffers[IndexBuffer]);
+    glDrawElements(GL_TRIANGLES, NumIndices, GL_UNSIGNED_BYTE, bufferOffset(0));
+}
+
+} // namespace
+
+int main(int argc, char *argv[])
+{
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        std::cerr << SDL_GetError() << std::endl;
+        return -1;
+    }
+
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
+    // Create an OpenGL capable window
+    SDL_Window *window = SDL_CreateWindow(
+        "Prespective Projection Test",
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        800, 600,
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
+    );
+    if (!window) {
+        std::cerr << SDL_GetError() << std::endl;
+        SDL_Quit();
+        return -1;
+    }
+
+    // Create an OpenGL context associated with the window.
+    SDL_GLContext glcontext = SDL_GL_CreateContext(window);
+    if (!glcontext) {
+        std::cerr << SDL_GetError() << std::endl;
+        SDL_Quit();
+        return -1;
+    }
+
+    // Load extensions
+    if (ogl_LoadFunctions() != ogl_LOAD_SUCCEEDED) {
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return -1;
+    }
+
+    // Initialize displayables
+    init();
+
+    SDL_Event event;
+    bool keepRunning = true;
+    while (keepRunning) {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                keepRunning = false;
+            }
+        }
+
+        // Render scene
+        display();
+
+        // Swap buffers
+        SDL_GL_SwapWindow(window);
+    }
+
+    // Once finished with OpenGL functions, the SDL_GLContext can be deleted.
+    SDL_GL_DeleteContext(glcontext);
+
+    // Done! Close the window, clean-up and exit the program.
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
+    return 0;
+}

@@ -1,0 +1,91 @@
+program := 'program' id '(' identifier_list ')' ';'
+           declarations
+           subprogram_declarations
+           compound_statement
+           '.'
+
+identifier_list := id identifier_list_r
+
+identifier_list_r := ',' identifier_list
+                   | ε
+
+declarations := 'var' identifier_list ':' type ';' declarations
+              | ε
+
+type := standard_type
+      | 'array' '[' num '..' num ']' 'of' standard_type
+
+standard_type := 'integer'
+               | 'real'
+
+subprogram_declarations := subprogram_declaration ';' subprogram_declarations
+                         | ε
+
+subprogram_declaration := subprogram_head declarations compound_statement
+
+subprogram_head := 'function' id arguments ':' standard_type ';'
+                 | 'procedure' id arguments ';'
+
+arguments := '(' argument_list ')'
+           | ε
+
+argument_list := identifier_list ':' type argument_list_r
+
+argument_list_r := ';' argument_list
+                 | ε
+
+compound_statement := 'begin' optional_statements 'end'
+
+optional_statements := statement_list
+                     | ε
+
+statement_list := statement statement_list_r
+
+statement_list_r := ';' statement_list
+                  | ε
+
+statement := id statement_p
+           | compound_statement
+           | 'if' expression 'then' statement 'else' statement
+           | 'while' expression 'do' statement
+
+statement_p := optional_index assignop expression
+             | optional_parameters
+
+optional_index := '[' expression ']'
+                | ε
+
+optional_parameters := '(' expression_list ')'
+                     | ε
+
+expression_list := expression expression_list_r
+
+expression_list_r := ',' expression_list
+                   | ε
+
+expression := simple_expression expression_p
+
+expression_p := relop simple_expression
+              | ε
+
+simple_expression := term simple_expression_r
+                   | sign term simple_expression_r
+
+simple_expression_r := addop term simple_expression_r
+                     | ε
+
+term := factor term_r
+
+term_r := mulop term
+        | ε
+
+factor := id factor_p
+        | num
+        | '(' expression ')'
+        | 'not' factor
+
+factor_p := optional_index
+          | '(' expression_list ')'
+
+sign := '+'
+      | '-'
